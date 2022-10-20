@@ -11,11 +11,6 @@ from time import time
 
 
 def downloadVideoAudio(_videoLink: str, _regex: Union[Pattern, Callable[[str], str]], _channelName: str, _count=0):
-    # checks if it's been downloaded before
-    for vid in os.listdir(_channelName):
-        if _videoLink.split("=")[-1] in vid:
-            return
-
     # queues up the file to be downloaded
     yt = YouTube(_videoLink)
     audio_file = yt.streams.filter(only_audio=True, file_extension='mp4').order_by('abr').asc().first()
@@ -53,11 +48,23 @@ def downloadChannelAudio(_channel: str, _regex: Union[Pattern, Callable[[str], s
     if _threads > 1:
         with concurrent.futures.ProcessPoolExecutor(max_workers=_threads) as executor:
             for video in Channel(f"https://www.youtube.com/c/{_channel}/videos")[:_count]:
-                executor.submit(downloadVideoAudio, video, _regex, _channel)
+                # checks if it's been downloaded before
+                _break = False
+                for vid in os.listdir(_channel):
+                    if video.split("=")[-1] in vid:
+                        _break = True
+                if not _break:
+                    executor.submit(downloadVideoAudio, video, _regex, _channel)
     else:
         for video in Channel(f"https://www.youtube.com/c/{_channel}/videos")[:_count]:
-            downloadVideoAudio(video, _regex, _channel)
-    print(f"it took {time() - s} seconds to downloads")
+            # checks if it's been downloaded before
+            _break = False
+            for vid in os.listdir(_channel):
+                if video.split("=")[-1] in vid:
+                    _break = True
+            if not _break:
+                downloadVideoAudio(video, _regex, _channel)
+    print(f"it took {time() - s} seconds to process the downloads")
 
     model = whisper.load_model("base")
     print("HAI")
