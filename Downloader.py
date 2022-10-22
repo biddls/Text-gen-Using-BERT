@@ -4,11 +4,7 @@ from pytube import YouTube
 from pytube import Channel
 from typing import Union, Callable, Pattern
 import whisper
-
-
-# tesing
-from time import time
-
+from whisper import Whisper
 
 def downloadVideoAudio(_videoLink: str, _regex: Union[Pattern, Callable[[str], str]], _channelName: str, _count=0):
     # queues up the file to be downloaded
@@ -39,12 +35,30 @@ def downloadVideoAudio(_videoLink: str, _regex: Union[Pattern, Callable[[str], s
     audio_file.download(output_path=_channelName, filename=f'{_videoLink}.mp4')
 
 
-def downloadChannelAudio(_channel: str, _regex: Union[Pattern, Callable[[str], str]], _count: int, _threads: int):
+def runModel(_model: Whisper, _file: str) -> str:
+    result = _model.transcribe(_file, language="en")["text"]
+    with open(f'{_file.replace(".mp4", ".txt")}', 'w') as f:
+        f.write(result)
+    return result
+
+
+def transcribeAudio(_model: str, _dir: str) -> [str]:
+    if _model not in whisper.available_models():
+        raise ValueError(str(f"{_model} has to be in {whisper.available_models()}"))
+    model = whisper.load_model(_model)
+    results = list()
+    for file in os.listdir(_dir):
+        results.append(runModel(model, f"{_dir}/{file}",))
+
+    return results
+
+
+def downloadChannelAudio(_channel: str, _regex: Union[Pattern, Callable[[str], Union[str, bool]]], _count: int, _threads: int):
     _count = -1 if _count < 1 else _count
 
     if not os.path.exists(_channel):
         os.makedirs(_channel)
-    s = time()
+
     if _threads > 1:
         with concurrent.futures.ProcessPoolExecutor(max_workers=_threads) as executor:
             for video in Channel(f"https://www.youtube.com/c/{_channel}/videos")[:_count]:
@@ -64,9 +78,3 @@ def downloadChannelAudio(_channel: str, _regex: Union[Pattern, Callable[[str], s
                     _break = True
             if not _break:
                 downloadVideoAudio(video, _regex, _channel)
-    print(f"it took {time() - s} seconds to process the downloads")
-
-    model = whisper.load_model("base")
-    print("HAI")
-    result = model.transcribe("TheDailyGwei\\8wVaBFvUxyg_The_Daily_Gwei_Refuel_471.mp4")
-    print(result["text"])
