@@ -39,6 +39,8 @@ def runModel(_model: Whisper, _file: str) -> str:
     result = _model.transcribe(_file, language="en")["text"]
     with open(f'{_file.replace(".mp4", ".txt")}', 'w') as f:
         f.write(result)
+
+    # os.rename(_file, _file.split("/")[0]+"/processed_"+_file.split("/")[1])
     return result
 
 
@@ -48,33 +50,34 @@ def transcribeAudio(_model: str, _dir: str) -> [str]:
     model = whisper.load_model(_model)
     results = list()
     for file in os.listdir(_dir):
-        results.append(runModel(model, f"{_dir}/{file}",))
+        # checks if it's been processes before
+        if file.startswith("processed_"):
+            continue
+        # only process mp4 files
+        if file.endswith(".mp4"):
+            results.append(runModel(model, f"{_dir}/{file}",))
 
     return results
 
 
-def downloadChannelAudio(_channel: str, _regex: Union[Pattern, Callable[[str], Union[str, bool]]], _count: int, _threads: int):
-    _count = -1 if _count < 1 else _count
+def downloadChannelAudio(
+        _channel: str,
+        _regex: Union[Pattern, Callable[[str], Union[str, bool]]],
+        _count: int,
+        _threads: int):
+
+    _count = max(1, _count)
 
     if not os.path.exists(_channel):
         os.makedirs(_channel)
 
-    if _threads > 1:
-        with concurrent.futures.ProcessPoolExecutor(max_workers=_threads) as executor:
-            for video in Channel(f"https://www.youtube.com/c/{_channel}/videos")[:_count]:
-                # checks if it's been downloaded before
-                _break = False
-                for vid in os.listdir(_channel):
-                    if video.split("=")[-1] in vid:
-                        _break = True
-                if not _break:
-                    executor.submit(downloadVideoAudio, video, _regex, _channel)
-    else:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=_threads) as executor:
         for video in Channel(f"https://www.youtube.com/c/{_channel}/videos")[:_count]:
             # checks if it's been downloaded before
             _break = False
             for vid in os.listdir(_channel):
-                if video.split("=")[-1] in vid:
-                    _break = True
+                if vid.endswith('.mp4'):
+                    if video.split("=")[-1] in vid:
+                        _break = True
             if not _break:
-                downloadVideoAudio(video, _regex, _channel)
+                executor.submit(downloadVideoAudio, video, _regex, _channel)
