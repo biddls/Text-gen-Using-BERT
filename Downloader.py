@@ -1,7 +1,5 @@
 import concurrent.futures
 import os
-import re
-
 from pytube import YouTube
 from pytube import Channel
 from typing import Union, Callable, Pattern
@@ -86,7 +84,13 @@ def downloadChannelAudio(
 
     downloaded = list(glob.iglob(f'{_channel}/**/*.mp4', recursive=True))
     with concurrent.futures.ProcessPoolExecutor(max_workers=max(1, _threads)) as executor:
-        for video in Channel(f'https://www.youtube.com/c/{_channel}/videos')[:max(1, _count)]:
+        while True:
+            try:
+                a = Channel(f'https://www.youtube.com/c/{_channel}/videos')[:max(1, _count)]
+                break
+            except IndexError:
+                continue
+        for video in a:
             # checks if it's been downloaded before
             _break = False
             for vid in downloaded:
@@ -102,10 +106,3 @@ def prepDirs(_channelName: str):
         _dir = f'{_channelName}/{_dir}'
         if not os.path.exists(_dir):
             os.mkdir(_dir)
-
-
-if __name__ == "__main__":
-    channel = 'TheDailyGwei'
-    test = re.compile('(The Daily Gwei Refuel \d+)?=* - Ethereum Updates.mp4')
-    downloadChannelAudio(channel, test, 5, 2)
-    results = transcribeDirAudio('medium.en', channel)
