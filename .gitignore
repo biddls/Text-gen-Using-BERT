@@ -1,5 +1,6 @@
 /venv
 /.idea
-/TheDailyGwei
+/TheDailyGwei/audio
+/TheDailyGwei/processed
 __pycache__/
 *.docx
