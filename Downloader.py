@@ -87,6 +87,8 @@ def downloadChannelAudio(
         while True:
             try:
                 a = Channel(f'https://www.youtube.com/c/{_channel}/videos')[:max(1, _count)]
+                print("AH")
+                exit(0)
                 break
             except IndexError:
                 continue
