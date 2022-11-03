@@ -3,4 +3,5 @@
 /TheDailyGwei/audio
 /TheDailyGwei/processed
 __pycache__/
+/.env
 *.docx
