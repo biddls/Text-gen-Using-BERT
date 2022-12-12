@@ -1,50 +1,27 @@
 import concurrent.futures
 import os
-from pytube import YouTube
-from pytube import Channel
-from typing import Union, Callable, Pattern
+from typing import Pattern
 import whisper
 from whisper import Whisper
 from tqdm import tqdm
 import glob
+import yt_dlp
 
 
 def downloadVideoAudio(
         _fileName: str,
-        _regex: Union[Pattern, Callable[[str], str]],
-        _channelName: str,
-        _count=0,
-        _testing: bool = False):
-    yt = YouTube(_fileName)
-    audio_file = yt.streams.filter(only_audio=True, file_extension='mp4').order_by('abr').asc().first()
-
-    # makes certain checks
-    if audio_file.default_filename == 'Video Not Available.mp4':
-        if _count > 10:
-            if _testing:
-                print(f'Download failed {_fileName=}')
-            return
-        downloadVideoAudio(_fileName, _regex, _channelName, _count + 1)
-        return
-    if isinstance(_regex, Pattern):
-        if (a := _regex.search(audio_file.default_filename)) is None:
-            if _testing:
-                print(f'regex output: {a}\n {audio_file.default_filename=} {_fileName=} {_count=}')
-            return
-        a = a.string[a.regs[1][0]:a.regs[1][1]]
-    else:
-        if (a := _regex(audio_file.default_filename)) is False:
-            if _testing:
-                print(f'function output: {a}\n {audio_file.default_filename=}')
-            return
-
-    _fileName = f"{_fileName.split('=')[-1]}_{a.replace(' ', '_')}.mp4"
-    _channelName = f'{_channelName}/audio'
-
-    # if the video has already been downloaded skip it
-    if not os.path.exists(f'{_channelName}/{_fileName}'):
-        print(f'Downloading: {_fileName=}')
-        audio_file.download(output_path=_channelName, filename=_fileName)
+        _channel: str):
+    ydl_opts = {
+        'paths': {'home': f'{_channel}/audio'},
+        'format': 'm4a/bestaudio/best',
+        'postprocessors': [{  # Extract audio using ffmpeg
+            'key': 'FFmpegExtractAudio',
+            'preferredcodec': 'm4a',
+        }]
+    }
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([_fileName])
+    return
 
 
 def runModel(
@@ -54,7 +31,8 @@ def runModel(
     result = _model.transcribe(_file, language="en")["text"]
 
     # saves output of the model to a text file
-    with open(_file.replace("/audio/", "/text/").replace(".mp4", ".txt"), 'w') as f:
+    with open(_file.replace("/audio/", "/text/").replace(".m4a", ".txt"), 'w') as f:
+        print(result)
         f.write(result)
 
     # adds tag to audio file that it's been processed
@@ -66,7 +44,7 @@ def transcribeDirAudio(_model: str, _dir: str) -> [str]:
     model = whisper.load_model(_model)
     results = list()
 
-    files = list(glob.iglob(f'{_dir}/audio/*.mp4'))
+    files = list(glob.iglob(f'{_dir}/audio/*.m4a'))[::-1]
     for _file in tqdm(files, desc=f"Speach to text inf using {_model}"):
         results.append(runModel(model, _file, ))
 
@@ -75,31 +53,21 @@ def transcribeDirAudio(_model: str, _dir: str) -> [str]:
 
 def downloadChannelAudio(
         _channel: str,
-        _regex: Union[Pattern, Callable[[str], Union[str, bool]]],
+        _test: Pattern,
         _count: int,
         _threads: int,
         _testing: bool = False):
     if not os.path.exists(_channel):
         prepDirs(_channel)
 
-    downloaded = list(glob.iglob(f'{_channel}/**/*.mp4', recursive=True))
+    # downloaded = list(glob.iglob(f'{_channel}/**/*.m4a', recursive=True))
+    # reads in a text file called data.txt that contains the urls of the videos
+    with open(f'{_channel}/urls.txt', 'r') as f:
+        urls = f.read().splitlines()
+
     with concurrent.futures.ProcessPoolExecutor(max_workers=max(1, _threads)) as executor:
-        while True:
-            try:
-                a = Channel(f'https://www.youtube.com/c/{_channel}/videos')[:max(1, _count)]
-                print("AH")
-                exit(0)
-                break
-            except IndexError:
-                continue
-        for video in a:
-            # checks if it's been downloaded before
-            _break = False
-            for vid in downloaded:
-                if video.split("=")[-1] in vid:
-                    _break = True
-            if not _break:
-                executor.submit(downloadVideoAudio, video, _regex, _channel, _testing=_testing)
+        for video in urls:
+            executor.submit(downloadVideoAudio, video, _channel)
 
 
 def prepDirs(_channelName: str):
