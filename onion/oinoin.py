@@ -42,7 +42,6 @@ def tokeniseFile(file: str) -> [str]:
             yield encoding
 
 
-
 if __name__ == '__main__':
     tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
     # loadTransScriptions("temp")

@@ -1,9 +1,7 @@
 /venv
 /.idea
-/TheDailyGwei/audio
-/TheDailyGwei/processed
-/sirswag/audio
-/sirswag/processed
+/TheDailyGwei
+/sirswag
 __pycache__/
 /.env
 *.docx
