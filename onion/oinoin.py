@@ -1,8 +1,6 @@
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api import TranscriptsDisabled
 from tqdm import tqdm
-import glob
-from transformers import BertTokenizer
 
 
 def loadTransScriptions(file: str) -> [str]:
@@ -28,22 +26,5 @@ def loadTransScriptions(file: str) -> [str]:
     return output
 
 
-def tokeniseFile(file: str) -> [str]:
-    # Open the file
-    with open(file, "r", encoding= 'unicode_escape') as f:
-        while True:
-            text = f.readline()
-            if text == "":
-                break
-
-            # Tokenise the text
-            encoding = tokenizer.encode(text)
-
-            yield encoding
-
-
 if __name__ == '__main__':
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    # loadTransScriptions("temp")
-    # runs the BERT tokenizer on the script.txt file and trunkates to 512 tokens
-    tokens = [token[:512] for token in tokeniseFile("script.txt")]
+    loadTransScriptions("temp")
