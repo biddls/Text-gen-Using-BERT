@@ -103,6 +103,7 @@ def train(epochs, dataset, log=True, _model=None, _device=None):
     return model
 
 if __name__ == "__main__":
+    # downloads the BBC news data set
     if not os.path.exists("bbc"):
         #download the dataset
         from io import BytesIO
@@ -117,9 +118,16 @@ if __name__ == "__main__":
             zip_ref.extractall("")
         os.remove("bbc/README.TXT")
 
+    # split the pre-processed data set into individual files
     if not os.path.exists("onion/data"):
-        raise Exception("No onion dataset found")
+        import onion.split as onion_split
+        onion_split.splitOnion()
+        if not os.path.exists("onion/data"):
+            raise FileNotFoundError("onion/data not found")
 
+    # train the model
     model = train(3, Text_DataSet('bbc/**/*.txt'))
     model = train(3, Text_DataSet('onion/data/*.txt'), _model=model)
+
+    # save the model
     model.save_pretrained('models/')
