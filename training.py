@@ -1,18 +1,18 @@
 from glob import glob
-from transformers import BertTokenizer, BertForMaskedLM
+from transformers import BertTokenizer, BertForMaskedLM, Trainer, TrainingArguments
 import torch
-from torch.optim import AdamW
-from tqdm import tqdm
-import os
+import util
 
 
 tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
+device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
+print('Using: cuda' if torch.cuda.is_available() else 'Using: CPU')
 
 
 class Text_DataSet(torch.utils.data.Dataset):
-    def __init__(self, files):
+    def __init__(self, _files):
         # load data
-        files = glob(files)
+        files = glob(_files)
         corpus = []
         for file in files:
             with open(file, 'r') as f:
@@ -47,87 +47,57 @@ class Text_DataSet(torch.utils.data.Dataset):
             inputs.input_ids[i, selection[i]] = 103
 
         self.encodings = inputs
+        print(f'Dataset "{_files}" loaded')
     def __getitem__(self, idx):
         return {key: val[idx].clone().detach() for key, val in self.encodings.items()}
     def __len__(self):
         return len(self.encodings.input_ids)
 
-def train(epochs, dataset, log=True, _model=None, _device=None):
+def train(epochs, train_data, test_data, val_data, _model=None):
     if _model is None:
-        PATH = "models"
-        model = BertForMaskedLM.from_pretrained(PATH, local_files_only=True)
-        # model = BertForMaskedLM.from_pretrained('bert-base-uncased')
+        model = BertForMaskedLM.from_pretrained("results/checkpoint-500")
     else:
         model = _model
 
-    if _device is None:
-        device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-    else:
-        device = _device
+    training_args = TrainingArguments(
+        output_dir='./results',  # output directory
+        do_eval=True, # evaluate the model after training
+        num_train_epochs=1,  # total number of training epochs
+        per_device_train_batch_size=6,  # batch size per device during training
+        per_device_eval_batch_size=6,  # batch size for evaluation
+        warmup_steps=500,  # number of warmup steps for learning rate scheduler
+        weight_decay=0.01,  # strength of weight decay
+    )
 
-    loader = torch.utils.data.DataLoader(dataset, batch_size=6, shuffle=True)
+    trainer = Trainer(
+        model=model,  # the instantiated 🤗 Transformers model to be trained
+        args=training_args,                  # training arguments, defined above
+        train_dataset=train_data,  # training dataset
+        eval_dataset=test_data  # evaluation dataset
+    )
 
-    # and move our model over to the selected device
     model.to(device)
-    # activate training mode
-    model.train()
-    # initialize optimizer
-    optim = AdamW(model.parameters(), lr=5e-5)
-
-    for epoch in range(epochs):
-        # setup loop with TQDM and dataloader
-        if log:
-            loop = tqdm(loader, leave=True)
-        else:
-            loop = loader
-        for batch in loop:
-            # initialize calculated gradients (from prev step)
-            optim.zero_grad()
-            # pull all tensor batches required for training
-            input_ids = batch['input_ids'].to(device)
-            attention_mask = batch['attention_mask'].to(device)
-            labels = batch['labels'].to(device)
-            # process
-            outputs = model(input_ids,
-                            attention_mask=attention_mask,
-                            labels=labels)
-            # extract loss
-            loss = outputs.loss
-            # calculate loss for every parameter that needs grad update
-            loss.backward()
-            # update parameters
-            optim.step()
-            # print relevant info to progress bar
-            loop.set_description(f'Epoch {epoch}/{epochs-1}')
-            loop.set_postfix(loss=loss.item())
+    trainer.train()
+    eval_results = trainer.evaluate()
+    print(f"{eval_results['eval_loss']=:.2f}")
     return model
 
 if __name__ == "__main__":
-    # downloads the BBC news data set
-    if not os.path.exists("bbc"):
-        #download the dataset
-        from io import BytesIO
-        from zipfile import ZipFile
-        from urllib.request import urlopen
+    util.dataset_checks()
 
-        # open url
-        resp = urlopen("http://mlg.ucd.ie/files/datasets/bbc-fulltext.zip")
-        # read zipfile
-        zipfile = ZipFile(BytesIO(resp.read()))
-        with zipfile as zip_ref:
-            zip_ref.extractall("")
-        os.remove("bbc/README.TXT")
+    # loads data set
+    bbc = Text_DataSet('bbc/**/*.txt')
+    # splits data set into train, test and validation sets
+    train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(bbc, util.split_proportionally(len(bbc), [70, 20, 10]))
+    # train model
+    model = train(1, train_dataset, val_dataset, test_dataset)
+    # delets dataset to save memory
+    del bbc
 
-    # split the pre-processed data set into individual files
-    if not os.path.exists("onion/data"):
-        import onion.split as onion_split
-        onion_split.splitOnion()
-        if not os.path.exists("onion/data"):
-            raise FileNotFoundError("onion/data not found")
-
-    # train the model
-    model = train(3, Text_DataSet('bbc/**/*.txt'))
-    model = train(3, Text_DataSet('onion/data/*.txt'), _model=model)
-
+    # repeat on onion dataset for further fine-tuning
+    onion = Text_DataSet('onion/data/*.txt')
+    train_dataset, val_dataset, test_dataset = torch.utils.data.random_split(onion, util.split_proportionally(len(onion), [70, 20, 10]))
+    model = train(1, train_dataset, val_dataset, test_dataset, _model=model)
+    del onion
     # save the model
     model.save_pretrained('models/')

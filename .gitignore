@@ -8,3 +8,5 @@ __pycache__/
 /.env
 *.docx
 /models
+/onion/script.txt
+/onion/temp.txt
