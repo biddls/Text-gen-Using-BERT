@@ -1,20 +1,21 @@
 import os
-def splitOnion():
-    if os.getcwd() != "onion":
-        os.chdir("onion")
 
-    if not os.path.exists("data"):
-        os.mkdir("data")
+def splitOnion(file: str, directory: str = "onion"):
 
-    with open("script.txt", "r") as f:
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+
+    with open(file, "r", encoding="UTF-8") as f:
         a = f.readlines()
 
     for index, line in enumerate(a):
         line = line.replace("\n", " ")
-        with open(f"data/{index}.txt", "w") as f:
-            f.write(line)
-
-    os.chdir("..")
+        try:
+            with open(f"{directory}/{index}.txt", "w", encoding="UTF-8") as f:
+                f.write(line)
+        except UnicodeEncodeError as e:
+            print(index)
+            raise e
 
 if __name__ == "__main__":
-    splitOnion()
+    splitOnion("NewsWebScrape.txt", "WebData/")
