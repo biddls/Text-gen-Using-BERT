@@ -6,6 +6,7 @@ from glob import glob
 from tqdm import tqdm
 
 
+# can split a torch dataset into multiple datasets for test, train, eval for example
 def split_proportionally(num: int, proportions: List[int]) -> List[int]:
     # calculate the total sum of integers that need to be split
     if sum(proportions) != 100:
@@ -24,30 +25,37 @@ def split_proportionally(num: int, proportions: List[int]) -> List[int]:
     return integer_proportions
 
 
-def dataset_checks():
-    # downloads the BBC news data set
-    if not os.path.exists("bbc"):
-        # download the dataset
-        from io import BytesIO
-        from zipfile import ZipFile
-        from urllib.request import urlopen
+# downloads the BBC news data set and the onion transcript dataset if they are not downloaded
+# def dataset_checks():
+#     # downloads the BBC news data set
+#     if not os.path.exists("bbc"):
+#         # download the dataset
+#         from io import BytesIO
+#         from zipfile import ZipFile
+#         from urllib.request import urlopen
+#
+#         # open url
+#         resp = urlopen("http://mlg.ucd.ie/files/datasets/bbc-fulltext.zip")
+#         # read zipfile
+#         zipfile = ZipFile(BytesIO(resp.read()))
+#         with zipfile as zip_ref:
+#             zip_ref.extractall("")
+#         os.remove("bbc/README.TXT")
+#
+#     # split the pre-processed data set into individual files
+#     if not os.path.exists("onion/data"):
+#         import onion.split as onion_split
+#         onion_split.splitOnion()
+#         if not os.path.exists("onion/data"):
+#             raise FileNotFoundError("onion/data not found")
 
-        # open url
-        resp = urlopen("http://mlg.ucd.ie/files/datasets/bbc-fulltext.zip")
-        # read zipfile
-        zipfile = ZipFile(BytesIO(resp.read()))
-        with zipfile as zip_ref:
-            zip_ref.extractall("")
-        os.remove("bbc/README.TXT")
-
-    # split the pre-processed data set into individual files
-    if not os.path.exists("onion/data"):
-        import onion.split as onion_split
-        onion_split.splitOnion()
-        if not os.path.exists("onion/data"):
-            raise FileNotFoundError("onion/data not found")
+# Simple function to ensure the dataset is downloaded
+def dataset_checks(path: str):
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"{path} not found.\nRun onionNewsWebScrape.py first")
 
 
+# Custom implementation of torch.utils.data.Dataset for use in MLM training
 class Text_DataSet(torch.utils.data.Dataset):
     def __init__(self, _files, tokenizer):
         # load data
@@ -65,8 +73,9 @@ class Text_DataSet(torch.utils.data.Dataset):
 
                 corpus = [x.split(' #~# ')[1] for x in corpus]
             case _:
-                raise FileNotFoundError(f"No file Found {_files}")
+                raise FileNotFoundError(f"{_files} is empty")
 
+        # tokenize corpus
         if tokenizer is not None:
             inputs = tokenizer(
                 corpus,
@@ -78,6 +87,7 @@ class Text_DataSet(torch.utils.data.Dataset):
         else:
             raise TypeError("Tokenizer Not set")
 
+        # create labels
         inputs['labels'] = inputs.input_ids.detach().clone()
 
         # create random array of floats with equal dimensions to input_ids tensor
