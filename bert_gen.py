@@ -150,7 +150,7 @@ def predict(
     sentence = tokenizer.convert_tokens_to_string(tokenized_text)
     sentence = sentence.replace("[CLS] ", "").replace(" [SEP]", "")
     sentence = deTok.detokenize(sentence.split(" "))
-    return sentence
+    return sentence, tokenized_text
 
 
 def prompt_preprocessing(
@@ -195,4 +195,4 @@ if __name__ == "__main__":
     og, sentence_orig, length = prompt_preprocessing(random.choice(sentences))
     sentence_length = min(length, sentence_length)
 
-    out = predict((og, sentence_orig), sentence_length, liveOutput=True)
+    out, tokens = predict((og, sentence_orig), sentence_length, liveOutput=True)
