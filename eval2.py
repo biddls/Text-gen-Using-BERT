@@ -1,10 +1,8 @@
 import numpy as np
 from tqdm import tqdm
-
 import bert_gen as bg
 import torch
 from transformers import BertTokenizer, BertForMaskedLM
-import random
 
 
 path = './results/checkpoint-3000'
@@ -23,68 +21,64 @@ def predict(
         padding='max_length',
         return_tensors='pt',
         truncation=True,
-    )
-    temp = tokenized_text.input_ids.detach().clone()
-    # create labels
-    tokenized_text['labels'] = tokenized_text.input_ids.detach().clone()
-
-    # create random array of floats with equal dimensions to input_ids tensor
-    rand = torch.rand(tokenized_text.input_ids.shape)
+    ).input_ids
+    temp = tokenized_text.detach().clone()
 
     # create mask array
     # doesn't mask over any PAD, CLS or SEP tokens (0, 101, 102)
-    mask_arr = (rand < 0.15) * (tokenized_text.input_ids != 101) * \
-               (tokenized_text.input_ids != 102) * (tokenized_text.input_ids != 0)
+    mask_arr = (torch.rand(tokenized_text.shape) < 0.15) * \
+               (tokenized_text != 101) * \
+               (tokenized_text != 102) * \
+               (tokenized_text != 0)
 
-    selection = []
+    selection = mask_arr.nonzero()[:, 1]
 
-    for i in range(tokenized_text.input_ids.shape[0]):
-        selection.append(
-            torch.flatten(mask_arr[i].nonzero()).tolist()
-        )
+    tokenized_text[0, selection] = 103
 
-    for i in range(tokenized_text.input_ids.shape[0]):
-        tokenized_text.input_ids[i, selection[i]] = 103
-
-
-    ff = (tokenized_text.input_ids == 103).nonzero()[:, 1]
-    temp_segments_ids = [0] * len(tokenized_text.input_ids)
-    segments_tensors = torch.tensor([temp_segments_ids])
+    # gets indices of the mask tokens
+    ff = (tokenized_text == 103).nonzero()[:, 1]
 
     # Predict all tokens
     with torch.no_grad():
-        outputs = model(tokenized_text.input_ids, token_type_ids=segments_tensors)
-        predictions = outputs[0]
+        outputs = model(tokenized_text)
 
-    predicted_index = predictions[0, ff].argsort()[:, -1]
-    _pred = predicted_index.numpy()
+    # predicted index
+    predicted_index = outputs[0][0, ff].argsort()
+    _predicted_index = predicted_index[:, -1]
+    _pred = _predicted_index.numpy()
 
     # labels
     temp = (temp.numpy())[0, ff]
 
     # accuracy of prediction
-    acc = (_pred == temp).sum()/len(_pred)
+    _acc = np.sum(_pred == temp)/len(_pred)
 
     # distance of prediction
-    predicted_index = predictions[0, ff].argsort().numpy()
-    predicted_index = predicted_index[:, ::-1]
-    dist = np.zeros_like(temp)
+    predicted_index = predicted_index.numpy()[:, ::-1]
+    _dist = np.zeros_like(temp)
     for i, j in enumerate(predicted_index):
-        dist[i] = np.argwhere(temp[i] == j)
+        _dist[i] = np.argwhere(temp[i] == j)
 
-    return acc, dist
+    return _acc, _dist
 
-with open("./onion/NewsWebScrape.txt", 'r', encoding="UTF-8") as txt_file:
-    sentences = txt_file.readlines()
-sentences = [i.replace('\n', '') for i in sentences]
-sentences = [i.split(' #~# ')[1] for i in sentences]
 
-ogs = [bg.prompt_preprocessing(sentence)[0] for sentence in sentences]
+if __name__ == "__main__":
+    with open("./onion/NewsWebScrape.txt", 'r', encoding="UTF-8") as txt_file:
+        sentences = txt_file.readlines()
+    sentences = [i.replace('\n', '') for i in sentences]
+    sentences = [i.split(' #~# ')[1] for i in sentences]
 
-metrics = [predict(og) for og in tqdm(ogs[:10])]
+    ogs = [bg.prompt_preprocessing(sentence)[0] for sentence in sentences][:10]
 
-acc = np.mean([i[0] for i in metrics])
-dist = np.mean([np.mean(i[1]) for i in metrics])
+    metrics = [predict(sentence) for sentence in tqdm(ogs)]
 
-print(f"Average accuracy is: {acc * 100:.2f}%")
-print(f"Average distance is: {dist:.0f} indices")
+    # save metrics
+    with open("metrics.csv", 'a') as f:
+        for acc, dist in metrics:
+            f.write(f"{acc},{','.join(dist.astype(str))}\n")
+
+    acc = np.mean([i[0] for i in metrics])
+    dist = np.mean([np.mean(i[1]) for i in metrics])
+
+    print(f"Average accuracy is: {acc * 100:.2f}%")
+    print(f"Average distance is: {dist:.0f} indices")

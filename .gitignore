@@ -12,3 +12,4 @@ __pycache__/
 /onion/temp.txt
 /wandb
 /results
+*.csv
