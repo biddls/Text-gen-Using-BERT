@@ -25,6 +25,7 @@ def predict(
 
     # create mask array
     # doesn't mask over any PAD, CLS or SEP tokens (0, 101, 102)
+    counter = 5
     ff = torch.tensor([0])
     while ff.shape[0] <= 1:
         mask_arr = (torch.rand(tokenized_text.shape) < 0.15) * \
@@ -38,6 +39,10 @@ def predict(
 
         # gets indices of the mask tokens
         ff = (tokenized_text == 103).nonzero()[:, 1]
+        counter -= 1
+
+        if counter == 0:
+            return np.array([])
 
     # Predict all tokens
     with torch.no_grad():
@@ -62,10 +67,13 @@ def predict(
 
 
 if __name__ == "__main__":
-    # cashing to file
+    # checks if dataset has been cached
     if os.path.exists("ogs.pt"):
+        # load dataset from file
         ogs = torch.load("ogs.pt")
+        print("Loaded dataset from file")
     else:
+        # cashing to file
         with open("./onion/NewsWebScrape.txt", 'r', encoding="UTF-8") as txt_file:
             sentences = txt_file.readlines()
         sentences = [i.replace('\n', '') for i in sentences]
@@ -88,7 +96,7 @@ if __name__ == "__main__":
 
     # save metrics
     with open("metrics.csv", 'a') as f:
-        for dist in metrics:
+        for dist in tqdm(metrics, desc="Saving metrics"):
             f.write(f"{','.join(dist.astype(str))}\n")
 
     dist = np.mean([np.mean(i) for i in metrics])
